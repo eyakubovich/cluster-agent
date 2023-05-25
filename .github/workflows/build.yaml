@@ -1,0 +1,22 @@
+name: Build
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-binaries:
+    strategy:
+      matrix:
+        runs-on: [buildjet-4vcpu-ubuntu-2204, buildjet-4vcpu-ubuntu-2204-arm]
+
+    runs-on: ${{matrix.runs-on}}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Building agent
+        uses: docker/build-push-action@v3
+        with:
+          push: false
