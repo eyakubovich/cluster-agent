@@ -20,6 +20,8 @@ use pb::inventory_service_client::InventoryServiceClient;
 
 use crate::version::VERSION;
 
+use self::pb::UpsertWorkloadsRequest;
+
 const TOKEN_FILE: &str = "/var/lib/edgebit/token";
 const EXPIRATION_SLACK: Duration = Duration::from_secs(60);
 const DEFAULT_EXPIRATION: Duration = Duration::from_secs(60*60);
@@ -57,13 +59,33 @@ impl Client {
         })
     }
 
-    pub async fn upsert_workload(&mut self, workload: pb::UpsertWorkloadRequest) -> Result<()> {
-        self.inventory_svc.upsert_workload(workload).await?;
+    pub async fn upsert_cluster(&mut self, id: String) -> Result<()> {
+        self.inventory_svc.upsert_clusters(pb::UpsertClustersRequest{
+            clusters: vec![pb::Cluster{
+                kind: pb::ClusterKind::Kube as i32,
+                id,
+                name: String::new(),
+            }],
+        }).await?;
+
         Ok(())
     }
 
-    pub async fn reset_workloads(&mut self) -> Result<()> {
-        self.inventory_svc.reset_workloads(pb::ResetWorkloadsRequest{}).await?;
+    pub async fn upsert_machines(&mut self, machines: Vec<pb::Machine>) -> Result<()> {
+        self.inventory_svc.upsert_machines(pb::UpsertMachinesRequest{
+            machines,
+        }).await?;
+
+        Ok(())
+    }
+
+    pub async fn reset_workloads(&mut self, req: pb::ResetWorkloadsRequest) -> Result<()> {
+        self.inventory_svc.reset_workloads(req).await?;
+        Ok(())
+    }
+
+    pub async fn upsert_workloads(&mut self, req: UpsertWorkloadsRequest) -> Result<()> {
+        self.inventory_svc.upsert_workloads(req).await?;
         Ok(())
     }
 
@@ -159,6 +181,7 @@ impl SessionKeeper {
                     deployment_token: deploy_token,
                     hostname,
                     agent_version: VERSION.to_string(),
+                    machine_id: String::new(),
                 };
 
                 let resp = token_svc.enroll_agent(req)

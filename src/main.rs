@@ -11,6 +11,7 @@ use log::*;
 use clap::Parser;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
+use prost_types::Timestamp;
 
 use config::Config;
 use kube_state::{KubeState, KubeResource, Container};
@@ -18,6 +19,11 @@ use platform::pb;
 
 const COLLECTION_INTERVAL: Duration = Duration::from_secs(600);
 const RECONNECT_INTERVAL: Duration = Duration::from_secs(60);
+
+const TIMESTAMP_INFINITY: Timestamp = Timestamp {
+    seconds: 4134009600, // 2101-01-01
+    nanos: 0,
+};
 
 #[derive(Parser)]
 struct CliArgs {
@@ -72,32 +78,52 @@ async fn collect(edgebit: &mut platform::Client) -> Result<()> {
 
     kube.load_all().await?;
 
-    let workloads = make_workloads(&kube);
+    edgebit.upsert_cluster(kube.cluster_id().to_string()).await?;
 
-    for wl in workloads {
-        let labels = stringify_labels(&wl.labels);
-        println!("{}/{}:\n    {}", wl.namespace, wl.container.name, labels);
+    let machines = kube.machines()
+        .into_iter()
+        .map(|m| pb::Machine{
+            id: m.id,
+            hostname: m.name,
+        })
+        .collect();
 
-        if let Err(err) = upsert_workload(edgebit, wl).await {
-            error!("Failed to upsert the workload: {err}");
-        }
+    debug!("{machines:?}");
+
+    edgebit.upsert_machines(machines).await?;
+
+    let workloads = make_workloads(&kube)
+        .into_iter()
+        .map(|wl| wl.into_pb())
+        .collect();
+
+    debug!("{workloads:?}");
+    
+    let req = pb::ResetWorkloadsRequest{
+        cluster_id: kube.cluster_id().to_string(),
+        workloads,
+    };
+
+    if let Err(err) = edgebit.reset_workloads(req).await {
+        error!("Failed to send snapshot: {err}");
     }
 
     Ok(())
 }
 
+#[derive(Debug)]
 struct Workload {
     container: Container,
-    namespace: String,
     labels: HashMap<String, String>,
+    machine_id: String,
 }
 
 impl Workload {
-    fn new(container: Container, namespace: String) -> Self {
+    fn new(container: Container, machine_id: String) -> Self {
         Self{
             container,
-            namespace,
             labels: HashMap::new(),
+            machine_id,
         }
     }
 
@@ -115,6 +141,30 @@ impl Workload {
         
         self.labels.insert(key, name);
     }
+
+    fn into_pb(self) -> pb::WorkloadInstance {
+        pb::WorkloadInstance {
+            workload_id: self.container.container_id,
+            workload: Some(pb::Workload{
+                labels: self.labels,
+                kind: Some(pb::workload::Kind::Container(pb::Container{
+                        name: self.container.name,
+                })),
+            }),
+            start_time: self.container.started_at.map(dt_to_timestamp),
+            end_time: match self.container.finished_at {
+                Some(dt) => Some(dt_to_timestamp(dt)),
+                None => Some(TIMESTAMP_INFINITY),
+            },
+            image_id: self.container.image_id,
+            image: Some(pb::Image{
+                kind: Some(pb::image::Kind::Docker(pb::DockerImage{
+                    tag: self.container.image,
+                })),
+            }),
+            machine_id: self.machine_id,
+        }
+    }
 }
  
 fn make_workloads(kube: &KubeState) -> Vec<Workload> {
@@ -125,9 +175,22 @@ fn make_workloads(kube: &KubeState) -> Vec<Workload> {
             let ns = pod.meta.namespace.clone()
                 .unwrap_or("default".to_string());
 
-            let mut wl = Workload::new(c.clone(), ns);
-            expand_labels(kube, &mut wl, kube_state::KIND_POD, pod);
-            wls.push(wl);
+            let machine_id = kube.machine_id(&c.node_name);
+
+            match machine_id {
+                Some(machine_id) => {
+                    let mut wl = Workload::new(c.clone(), machine_id.to_string());
+                    expand_labels(kube, &mut wl, kube_state::KIND_POD, pod);
+                    wl.labels.insert("kube:namespace:name".to_string(), ns);
+
+                    debug!("{wl:?}");
+                    wls.push(wl);
+                },
+
+                None => {
+                    warn!("machineID was not found for pod {}/{}", ns, pod.meta.name.clone().unwrap_or_default());
+                }
+            }
         }
     }
 
@@ -163,30 +226,6 @@ fn stringify_labels(labels: &HashMap<String, String>) -> String {
         .map(|(k, v)| format!("{k}={v}"))
         .collect();
     labels.join("\n    ")
-}
-
-async fn upsert_workload(edgebit: &mut platform::Client, wl: Workload) -> Result<()> {
-    let req = pb::UpsertWorkloadRequest{
-        workload_id: wl.container.container_id,
-        workload: Some(pb::Workload{
-            labels: wl.labels,
-            kind: Some(pb::workload::Kind::Container(pb::Container{
-                    name: wl.container.name,
-            })),
-        }),
-        start_time: wl.container.started_at.map(dt_to_timestamp),
-        end_time: wl.container.finished_at.map(dt_to_timestamp),
-        image_id: wl.container.image_id,
-        image: Some(pb::Image{
-            kind: Some(pb::image::Kind::Docker(pb::DockerImage{
-                tag: wl.container.image,
-            })),
-        }),
-    };
-
-    edgebit.upsert_workload(req).await?;
-
-    Ok(())
 }
 
 fn dt_to_timestamp(dt: DateTime<Utc>) -> prost_types::Timestamp {

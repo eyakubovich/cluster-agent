@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow};
 use serde::de::DeserializeOwned;
 use k8s_openapi::Metadata;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
-use k8s_openapi::api::core::v1::{Pod, ContainerStatus};
+use k8s_openapi::api::core::v1::{Pod, ContainerStatus, Node, Namespace};
 use k8s_openapi::api::apps::v1::{Deployment, ReplicaSet, StatefulSet, DaemonSet};
 use k8s_openapi::api::batch::v1::{Job, CronJob};
 use kube_client::api::{ObjectMeta, ListParams};
@@ -20,6 +20,14 @@ pub const KIND_JOB: &str = "Job";
 pub const KIND_CRON_JOB: &str = "CronJob";
 pub const KIND_DAEMON_SET: &str = "DaemonSet";
 
+const NS_KUBE_SYSTEM: &str = "kube-system";
+
+#[derive(Clone, Debug)]
+pub struct Machine {
+    pub name: String,
+    pub id: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct Container {
     pub pod_uid: String,
@@ -27,6 +35,7 @@ pub struct Container {
     pub name: String,
     pub image: String,
     pub image_id: String,
+    pub node_name: String,
     pub started_at: Option<DateTime<Utc>>,
     pub finished_at: Option<DateTime<Utc>>,
 }
@@ -57,6 +66,7 @@ impl TryFrom<ContainerStatus> for Container {
             name: status.name,
             image: status.image,
             image_id: status.image_id,
+            node_name: String::new(),
             started_at,
             finished_at,
         })
@@ -79,6 +89,8 @@ impl KubeResource {
 
 pub struct KubeState {
     client: kube_client::Client,
+    sys_ns_id: String,
+    nodes: HashMap<String, String>, // nodeName -> machineID
     containers: Vec<Container>,
     resources: HashMap<&'static str, Vec<KubeResource>>,
 }
@@ -87,12 +99,16 @@ impl KubeState {
     pub async fn with_defaults() -> Result<Self> {
         Ok(Self{
             client: kube_client::Client::try_default().await?,
+            sys_ns_id: String::new(),
+            nodes: HashMap::new(),
             containers: Vec::new(),
             resources: HashMap::new(),
         })
     }
 
     pub async fn load_all(&mut self) -> Result<()> {
+        self.load_cluster_id().await?;
+        self.load_nodes().await?;
         self.load_pods().await?;
         self.load_deployments().await?;
         self.load_replica_sets().await?;
@@ -100,6 +116,25 @@ impl KubeState {
         self.load_jobs().await?;
         self.load_cron_jobs().await?;
         self.load_daemon_sets().await?;
+
+        Ok(())
+    }
+
+    pub async fn load_nodes(&mut self) -> Result<()> {
+        let api: Api<Node> = Api::all(self.client.clone());
+
+        for node in api.list(&ListParams::default()).await? {
+            let machine_id = node.status
+                .and_then(|s| s.node_info)
+                .map(|ni| ni.machine_id);
+
+            match (node.metadata.name, machine_id) {
+                (Some(name), Some(machine_id)) => {
+                    self.nodes.insert(name, machine_id);
+                },
+                _ => (),
+            }
+        }
 
         Ok(())
     }
@@ -115,6 +150,10 @@ impl KubeState {
                         if let Ok(mut c) = Container::try_from(s) {
                             c.pod_uid = pod.metadata.uid.clone()
                                 .unwrap_or_default();
+                            c.node_name = pod.spec
+                                .as_ref()
+                                .and_then(|s| s.node_name.clone())
+                                .unwrap_or_default();
 
                             self.containers.push(c);
                         }
@@ -125,6 +164,10 @@ impl KubeState {
                     for s in cs {
                         if let Ok(mut c) = Container::try_from(s) {
                             c.pod_uid = pod.metadata.uid.clone()
+                                .unwrap_or_default();
+                            c.node_name = pod.spec
+                                .as_ref()
+                                .and_then(|s| s.node_name.clone())
                                 .unwrap_or_default();
 
                             self.containers.push(c);
@@ -170,6 +213,15 @@ impl KubeState {
         Ok(())
     }
 
+    pub async fn load_cluster_id(&mut self) -> Result<()> {
+        let api: Api<Namespace> = Api::all(self.client.clone());
+        self.sys_ns_id = api.get(NS_KUBE_SYSTEM).await?
+            .metadata
+            .uid
+            .ok_or(anyhow!("UID missing for {NS_KUBE_SYSTEM} namespace"))?;
+        Ok(())
+    }
+
     async fn fetch_all<K>(&self) -> Result<Vec<KubeResource>>
     where K: Clone + DeserializeOwned + Debug + Metadata<Ty = ObjectMeta>,
         <K as kube_client::Resource>::DynamicType: Default
@@ -196,6 +248,24 @@ impl KubeState {
 
     pub fn containers(&self) -> &[Container] {
         &self.containers
+    }
+
+    pub fn machine_id(&self, node_name: &str) -> Option<&str> {
+        self.nodes.get(node_name)
+            .map(|s| s.as_ref())
+    }
+
+    pub fn cluster_id(&self) -> &str {
+        &self.sys_ns_id
+    }
+
+    pub fn machines(&self) -> Vec<Machine> {
+        self.nodes.iter()
+            .map(|(name, id)| Machine{
+                id: id.to_string(),
+                name: name.to_string()
+            })
+            .collect()
     }
 
     pub fn dump(&self) {
