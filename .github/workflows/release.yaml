@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  sign-tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up gitsign
+        uses: chainguard-dev/actions/setup-gitsign@main
+
+      - name: Sign the tag
+        shell: bash
+        run: |
+          # Make sure the tag is on main branch
+          git merge-base --is-ancestor ${{ github.ref_name }} origin/main && echo "Tag is on main"
+          git tag -s -f -m "${{ github.ref_name }}" ${{ github.ref_name }}
+          git push -f origin ${{ github.ref_name }}
+
+  build:
+    needs: sign-tag
+
+    strategy:
+      matrix:
+        include:
+          - runner: buildjet-4vcpu-ubuntu-2204
+            arch: amd64
+          - runner: buildjet-4vcpu-ubuntu-2204-arm
+            arch: arm64
+
+    runs-on: ${{matrix.runner}}
+
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Authenticate to AWS
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::970625735569:role/GitHubActionsECRPush
+
+      - name: Configure AWS Docker Auth
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          registry-type: public
+
+      - name: Generate Image Metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            public.ecr.aws/edgebit/cluster-agent
+          tags: |
+            type=semver,pattern={{major}}.{{minor}}-${{ matrix.arch }}
+          flavor: |
+            latest=false
+
+      - name: Building cluster agent
+        uses: docker/build-push-action@v3
+        with:
+          push: false
+          target: build
+          tags: cluster-agent-build
+
+      - name: Building and pushing cluster agent container
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+
+  docker-combine:
+    needs: build
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Authenticate to AWS
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::970625735569:role/GitHubActionsECRPush
+
+      - name: Configure AWS Docker Auth
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          registry-type: public
+
+      - name: Generate Image Metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            public.ecr.aws/edgebit/cluster-agent
+          tags: |
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}.{{minor}}.{{patch}}
+
+      - name: Combine into multi-arch
+        shell: bash
+        run: |
+          input="${{ steps.meta.outputs.tags }}"
+
+          for tag in $input; do
+            tags="$tags --tag $tag"
+          done
+
+          docker buildx imagetools create \
+            $tags \
+            public.ecr.aws/edgebit/cluster-agent:${{ steps.meta.outputs.version}}-amd64 \
+            public.ecr.aws/edgebit/cluster-agent:${{ steps.meta.outputs.version}}-arm64
+
+  draft-release:
+    needs: docker-combine
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Creating a draft release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ github.ref_name }}
