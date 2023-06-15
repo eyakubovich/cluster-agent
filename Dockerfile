@@ -9,7 +9,7 @@ RUN apt -y update && apt -y install protobuf-compiler pkg-config libssl-dev
 
 RUN cargo -vv build --release
 
-
+# ---------------------------
 
 FROM debian:bullseye-slim
 

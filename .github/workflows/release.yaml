@@ -43,7 +43,7 @@ jobs:
     runs-on: ${{matrix.runner}}
 
     permissions:
-      id-token: write
+      id-token: write  # For AWS OIDC
 
     steps:
       - uses: actions/checkout@v3
@@ -70,13 +70,6 @@ jobs:
           flavor: |
             latest=false
 
-      - name: Building cluster agent
-        uses: docker/build-push-action@v3
-        with:
-          push: false
-          target: build
-          tags: cluster-agent-build
-
       - name: Building and pushing cluster agent container
         uses: docker/build-push-action@v3
         with:
@@ -87,6 +80,9 @@ jobs:
     needs: build
 
     runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write  # For AWS OIDC
 
     steps:
       - name: Authenticate to AWS
@@ -130,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
+      contents: write  # For creating a draft release
 
     steps:
       - name: Creating a draft release
