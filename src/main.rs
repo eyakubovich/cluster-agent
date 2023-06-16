@@ -72,7 +72,7 @@ async fn run(
 
     info!("Connecting to EdgeBit at {url}");
 
-    let mut edgebit = platform::Client::connect(url.try_into()?, token, config.hostname()).await?;
+    let mut edgebit = platform::Client::connect(url.try_into()?, token).await?;
 
     upsert_all(&mut edgebit, kube.clone(), config.cluster_name()).await?;
 
