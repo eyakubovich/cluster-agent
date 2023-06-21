@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-agent
+  namespace: edgebit-system
+  labels: {}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: cluster-agent
+  template:
+    metadata:
+      labels:
+        app: cluster-agent
+      name: cluster-agent
+    spec:
+      containers:
+        - name: cluster-agent
+          image: "public.ecr.aws/edgebit/cluster-agent:0.1.0"
+          imagePullPolicy: IfNotPresent
+          command:
+          ports:
+          env:
+            - name: EDGEBIT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: cluster-agent-config
+                  key: edgebit-url
+            - name: EDGEBIT_ID
+              valueFrom:
+                secretKeyRef:
+                    name: cluster-agent-api-key
+                    key: edgebit-id
+                    optional: false
+            - name: EDGEBIT_CLUSTER_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: cluster-agent-config
+                  key: cluster-name
+      nodeSelector:
+        kubernetes.io/os: linux
+
+  strategy:
+    type: RollingUpdate

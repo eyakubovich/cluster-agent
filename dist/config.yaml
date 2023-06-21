@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edgebit-system
+  labels:
+    # Remove if not using the edgebit-agent (node agent)
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workload-reader
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    verbs: ["get", "watch", "list"]
+    resources:
+      - namespaces
+      - nodes
+      - pods
+      - deployments
+      - replicasets
+      - statefulsets
+      - daemonsets
+      - jobs
+      - cronjobs
+    resourceNames: ["", "kube-system"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workload-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: workload-reader
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: edgebit-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-agent-config
+  namespace: edgebit-system
+  labels: {}
+data:
+  edgebit-url: https://YOU_ORG.edgebit.io
+  cluster-name: YOUR_CLUSTER_NAME
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cluster-agent-api-key
+  namespace: edgebit-system
+  labels: {}
+type: Opaque
+stringData:
+  edgebit-id: YOUR_EDGEBIT_ID
