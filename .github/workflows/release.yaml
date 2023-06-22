@@ -30,7 +30,7 @@ jobs:
           git push -f origin ${{ github.ref_name }}
 
   draft-release:
-    needs: docker-combine
+    needs: sign-tag
 
     runs-on: ubuntu-latest
 
@@ -45,7 +45,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
 
   build:
-    needs: sign-tag
+    needs: draft-release
 
     strategy:
       matrix:
