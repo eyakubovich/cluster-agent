@@ -29,6 +29,21 @@ jobs:
           git tag -s -f -m "${{ github.ref_name }}" ${{ github.ref_name }}
           git push -f origin ${{ github.ref_name }}
 
+  draft-release:
+    needs: docker-combine
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # For creating a draft release
+
+    steps:
+      - name: Creating a draft release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ github.ref_name }}
+
   build:
     needs: sign-tag
 
@@ -71,10 +86,22 @@ jobs:
             latest=false
 
       - name: Building and pushing cluster agent container
+        id: build
         uses: docker/build-push-action@v3
         with:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+
+      - name: Generate and publish the SBOM
+        uses: anchore/sbom-action@v0
+        if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
+        with:
+          # generate for the container built above
+          image: ${{ steps.build.outputs.imageid }}
+          artifact-name: sbom.spdx.json
+          output-file: /tmp/sbom.spdx.json
+          format: spdx-json
+          syft-version: v0.74.1
 
   docker-combine:
     needs: build
@@ -120,17 +147,3 @@ jobs:
             public.ecr.aws/edgebit/cluster-agent:${{ steps.meta.outputs.version}}-amd64 \
             public.ecr.aws/edgebit/cluster-agent:${{ steps.meta.outputs.version}}-arm64
 
-  draft-release:
-    needs: docker-combine
-
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write  # For creating a draft release
-
-    steps:
-      - name: Creating a draft release
-        uses: softprops/action-gh-release@v1
-        with:
-          draft: true
-          tag_name: ${{ github.ref_name }}
