@@ -46,7 +46,7 @@ metadata:
   namespace: edgebit-system
   labels: {}
 data:
-  edgebit-url: https://YOU_ORG.edgebit.io
+  edgebit-url: https://YOUR_ORG.edgebit.io
   cluster-name: YOUR_CLUSTER_NAME
 ---
 apiVersion: v1
