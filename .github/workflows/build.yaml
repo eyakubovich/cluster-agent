@@ -16,7 +16,30 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Building agent
+      - id: build
+        name: Building agent
         uses: docker/build-push-action@v3
         with:
           push: false
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
+        with:
+          # generate for the container built above
+          image: ${{ steps.build.outputs.imageid }}
+          artifact-name: sbom.syft.json
+          output-file: /tmp/sbom.syft.json
+          format: syft-json
+
+      - name: Upload SBOM to EdgeBit
+        uses: edgebitio/edgebit-build@main
+        if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
+        with:
+          edgebit-url: https://edgebit.edgebit.io
+          token: ${{ secrets.EDGEBIT_ACCESS_TOKEN }}
+          tags: latest
+          component: cluster-agent
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          image-id: ${{ steps.build.outputs.imageid }}
+          sbom-file: /tmp/sbom.syft.json
