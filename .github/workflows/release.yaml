@@ -94,7 +94,7 @@ jobs:
 
       - name: Generate and publish the SBOM
         uses: anchore/sbom-action@v0
-        if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
+        if: ${{ matrix.arch == 'amd64' }}
         with:
           # generate for the container built above
           image: ${{ steps.build.outputs.imageid }}
