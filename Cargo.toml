@@ -13,7 +13,7 @@ log = "0.4"
 pretty_env_logger = "0.4"
 serde = "1.0"
 serde_yaml = "0.9"
-chrono = "0.4"
+chrono = { version = "0.4", default-features = false }
 futures = "0.3.28"
 kube-client = "0.82.2"
 kube-runtime = "0.82.2"
