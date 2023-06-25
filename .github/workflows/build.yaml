@@ -32,14 +32,20 @@ jobs:
           output-file: /tmp/sbom.syft.json
           format: syft-json
 
-      - name: Upload SBOM to EdgeBit
-        uses: edgebitio/edgebit-build@main
+      - name: Save Artifacts
+        if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
+        run: |
+          mkdir -p ./artifacts
+          cat > ./artifacts/metadata.json <<EOF
+            {
+              "image-id": "${{ steps.build.outputs.imageid }}",
+              "pr-number": "${{ github.event.number }}"
+            }
+          EOF
+          cp /tmp/sbom.syft.json ./artifacts/
+
+      - uses: actions/upload-artifact@v2
         if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
         with:
-          edgebit-url: https://edgebit.edgebit.io
-          token: ${{ secrets.EDGEBIT_ACCESS_TOKEN }}
-          tags: latest
-          component: cluster-agent
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          image-id: ${{ steps.build.outputs.imageid }}
-          sbom-file: /tmp/sbom.syft.json
+          name: artifacts
+          path: artifacts/
