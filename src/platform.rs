@@ -64,23 +64,33 @@ impl Client {
             .upsert_clusters(pb::UpsertClustersRequest {
                 clusters: vec![cluster],
             })
-            .await?;
+            .await
+            .map_err(|e| anyhow!("{}", e.message()))?;
 
         Ok(())
     }
 
     pub async fn upsert_machines(&mut self, req: pb::UpsertMachinesRequest) -> Result<()> {
-        self.inventory_svc.upsert_machines(req).await?;
+        self.inventory_svc
+            .upsert_machines(req)
+            .await
+            .map_err(|e| anyhow!("{}", e.message()))?;
         Ok(())
     }
 
     pub async fn reset_workloads(&mut self, req: pb::ResetWorkloadsRequest) -> Result<()> {
-        self.inventory_svc.reset_workloads(req).await?;
+        self.inventory_svc
+            .reset_workloads(req)
+            .await
+            .map_err(|e| anyhow!("{}", e.message()))?;
         Ok(())
     }
 
     pub async fn upsert_workloads(&mut self, req: UpsertWorkloadsRequest) -> Result<()> {
-        self.inventory_svc.upsert_workloads(req).await?;
+        self.inventory_svc
+            .upsert_workloads(req)
+            .await
+            .map_err(|e| anyhow!("{}", e.message()))?;
         Ok(())
     }
 
@@ -137,7 +147,11 @@ async fn enroll(channel: Channel, deploy_token: String) -> Result<(String, Syste
         agent_version: VERSION.to_string(),
     };
 
-    let resp = token_svc.enroll_cluster_agent(req).await?.into_inner();
+    let resp = token_svc
+        .enroll_cluster_agent(req)
+        .await
+        .map_err(|e| anyhow!("{}", e.message()))?
+        .into_inner();
 
     // ensure the token is ascii
     _ = AsciiMetadataValue::try_from(&resp.session_token)
@@ -187,7 +201,11 @@ async fn refresh_loop(
             agent_version: VERSION.to_string(),
         };
 
-        let resp = token_svc.get_session_token(req).await?.into_inner();
+        let resp = token_svc
+            .get_session_token(req)
+            .await
+            .map_err(|e| anyhow!("{}", e.message()))?
+            .into_inner();
 
         // ensure the token is ascii
         _ = AsciiMetadataValue::try_from(&resp.session_token)
