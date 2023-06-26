@@ -110,9 +110,11 @@ jobs:
       - name: Generate SBOM with custom cataloger
         run: "${{ steps.syft.outputs.cmd }} --config .github/config/syft.yaml -o spdx-json --file /tmp/sbom.spdx.json ${{ steps.build.outputs.imageid }}"
 
-      # Publish the resulting SBOMs
-      - name: Publish SBOM
-        uses: anchore/sbom-action/publish-sbom@v0.14.2
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v3
+        with:
+          name: sbom-$${ matrix.arch }.spdx.json
+          path: /tmp/sbom.spdx.json
 
   docker-combine:
     needs: build
