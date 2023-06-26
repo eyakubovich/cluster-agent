@@ -1,0 +1,11 @@
+output: syft-json
+
+check-for-app-update: false
+
+catalogers:
+  - dpkgdb
+  - dpkg-db
+  - go-module-binary
+  - go-mod-file
+  - rust-cargo-lock
+  - sbom

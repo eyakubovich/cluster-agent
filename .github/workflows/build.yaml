@@ -22,15 +22,26 @@ jobs:
         with:
           push: false
 
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
+      # Download and run Syft manually in order to enable a custom set of catalogers
+      # We want to use the package-lock one which is not enabled by default for containers
+      - name: Download Syft
         if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
-        with:
-          # generate for the container built above
-          image: ${{ steps.build.outputs.imageid }}
-          artifact-name: sbom.syft.json
-          output-file: /tmp/sbom.syft.json
-          format: syft-json
+        id: syft
+        uses: anchore/sbom-action/download-syft@v0.14.2
+
+      - name: Generate SBOM with custom cataloger
+        if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
+        run: "${{ steps.syft.outputs.cmd }} --config .github/config/syft.yaml -o syft-json --file /tmp/sbom.syft.json ${{ steps.build.outputs.imageid }}"
+
+      #- name: Generate SBOM
+      #  uses: anchore/sbom-action@v0
+      #  if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
+      #  with:
+      #    # generate for the container built above
+      #    image: ${{ steps.build.outputs.imageid }}
+      #    artifact-name: sbom.syft.json
+      #    output-file: /tmp/sbom.syft.json
+      #    format: syft-json
 
       - name: Save Artifacts
         if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
