@@ -7,38 +7,6 @@ metadata:
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/enforce-version: latest
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: workload-reader
-rules:
-  - apiGroups: ["", "apps", "batch"]
-    verbs: ["get", "watch", "list"]
-    resources:
-      - namespaces
-      - nodes
-      - pods
-      - deployments
-      - replicasets
-      - statefulsets
-      - daemonsets
-      - jobs
-      - cronjobs
-    resourceNames: ["", "kube-system"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: workload-reader-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: workload-reader
-subjects:
-  - kind: ServiceAccount
-    name: default
-    namespace: edgebit-system
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
