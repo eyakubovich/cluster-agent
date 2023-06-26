@@ -59,7 +59,7 @@ spec:
             - name: EDGEBIT_URL
               valueFrom:
                 configMapKeyRef:
-                  name: cluster-agent-config
+                  name: edgebit-agent-config
                   key: edgebit-url
             - name: EDGEBIT_ID
               valueFrom:
@@ -70,7 +70,7 @@ spec:
             - name: EDGEBIT_CLUSTER_NAME
               valueFrom:
                 configMapKeyRef:
-                  name: cluster-agent-config
+                  name: edgebit-agent-config
                   key: cluster-name
       nodeSelector:
         kubernetes.io/os: linux

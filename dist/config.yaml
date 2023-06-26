@@ -10,7 +10,7 @@ metadata:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: cluster-agent-config
+  name: edgebit-agent-config
   namespace: edgebit-system
   labels: {}
 data:

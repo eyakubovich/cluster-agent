@@ -15,6 +15,8 @@ RUN cargo fmt --check && cargo build --release
 
 FROM debian:bookworm-slim
 
+RUN apt -y update && apt -y install openssl
+
 RUN mkdir -p /opt/edgebit
 
 COPY --from=builder /work/target/release/cluster-agent /opt/edgebit/
