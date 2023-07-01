@@ -28,6 +28,9 @@ const TIMESTAMP_INFINITY: Timestamp = Timestamp {
     nanos: 0,
 };
 
+const LABEL_NODE_NAME: &str = "kube:node:name";
+const LABEL_NS_NAME: &str = "kube:namespace:name";
+
 #[derive(Parser)]
 struct CliArgs {
     #[clap(long = "config", default_value = config::CONFIG_PATH)]
@@ -115,7 +118,8 @@ async fn upsert_all(
         .into_iter()
         .map(|m| pb::Machine {
             id: m.id,
-            hostname: m.name,
+            labels: [(LABEL_NODE_NAME.to_string(), m.name)].into(),
+            ..Default::default()
         })
         .collect();
 
@@ -146,7 +150,7 @@ fn container_into_pb(kube: &KubeState, c: Container) -> pb::WorkloadInstance {
         let mut labels = HashMap::new();
         expand_labels(kube, &mut labels, kube_state::KIND_POD, &pod);
 
-        labels.insert("kube:namespace:name".to_string(), pod.namespace);
+        labels.insert(LABEL_NS_NAME.to_string(), pod.namespace);
 
         pb::WorkloadInstance {
             workload_id: clean_workload_id(&c.container_id).to_string(),
@@ -256,8 +260,9 @@ async fn handle_machines_added(
             machines: machines
                 .into_iter()
                 .map(|m| pb::Machine {
-                    hostname: m.name,
+                    labels: [(LABEL_NODE_NAME.to_string(), m.name)].into(),
                     id: m.id,
+                    ..Default::default()
                 })
                 .collect(),
         };
