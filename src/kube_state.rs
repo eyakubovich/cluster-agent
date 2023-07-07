@@ -243,7 +243,7 @@ struct Resources {
 }
 
 impl Resources {
-    fn upsert(&mut self, kind: &str, resource: ObjectMeta) {
+    fn insert(&mut self, kind: &str, resource: ObjectMeta) {
         // unwrap() below is ok b/c kind is a compile time value.
         let resources = self.resources.get_mut(kind).unwrap();
 
@@ -268,12 +268,19 @@ impl Resources {
         }
     }
 
-    fn upsert_node(&mut self, node: Node) -> Machine {
+    fn insert_node(&mut self, node: Node) -> Option<Machine> {
         let machine = Machine::from(node);
 
-        self.nodes.insert(machine.name.clone(), machine.id.clone());
-
-        machine
+        if self
+            .nodes
+            .insert(machine.name.clone(), machine.id.clone())
+            .is_none()
+        {
+            // inserted, new machine
+            Some(machine)
+        } else {
+            None
+        }
     }
 
     fn delete_node(&mut self, name: &str) {
@@ -285,7 +292,7 @@ impl Resources {
     }
 
     // returns the list of changed containers in the pod
-    fn upsert_pod(&mut self, pod: Pod) -> Vec<Container> {
+    fn insert_pod(&mut self, pod: Pod) -> Vec<Container> {
         if pod.metadata.uid.is_some() {
             match self.pods.get_mut(pod.metadata.uid.as_ref().unwrap()) {
                 Some(existing) => existing.reset(pod),
@@ -399,7 +406,7 @@ impl KubeState {
         resources.clear_nodes();
 
         for node in nodes {
-            resources.upsert_node(node);
+            resources.insert_node(node);
         }
 
         Ok(())
@@ -415,7 +422,7 @@ impl KubeState {
         resources.clear_pods();
 
         for pod in pods {
-            resources.upsert_pod(pod);
+            resources.insert_pod(pod);
         }
 
         Ok(())
@@ -562,7 +569,7 @@ impl KubeState {
                 match e {
                     Event::Applied(r) => {
                         if r.metadata.uid.is_some() {
-                            self.resources.lock().unwrap().upsert(kind, r.metadata);
+                            self.resources.lock().unwrap().insert(kind, r.metadata);
                         }
                     }
                     Event::Deleted(r) => {
@@ -599,10 +606,11 @@ impl KubeState {
                 async move {
                     match e {
                         Event::Applied(node) => {
-                            let machine = self.resources.lock().unwrap().upsert_node(node);
-
-                            let evt = KubeEvent::MachinesAdded(vec![machine]);
-                            _ = events.send(evt).await;
+                            let machine = self.resources.lock().unwrap().insert_node(node);
+                            if let Some(machine) = machine {
+                                let evt = KubeEvent::MachinesAdded(vec![machine]);
+                                _ = events.send(evt).await;
+                            }
                         }
                         Event::Deleted(node) => {
                             if let Some(name) = node.metadata.name {
@@ -615,7 +623,7 @@ impl KubeState {
                             resources.clear_nodes();
 
                             for node in nodes {
-                                resources.upsert_node(node);
+                                resources.insert_node(node);
                             }
                         }
                     }
@@ -640,7 +648,7 @@ impl KubeState {
                 async move {
                     match e {
                         Event::Applied(pod) => {
-                            let containers = self.resources.lock().unwrap().upsert_pod(pod);
+                            let containers = self.resources.lock().unwrap().insert_pod(pod);
 
                             if !containers.is_empty() {
                                 _ = events.send(KubeEvent::ContainersUpdated(containers)).await;

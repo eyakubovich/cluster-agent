@@ -14,6 +14,7 @@ use clap::Parser;
 use log::*;
 use prost_types::Timestamp;
 use tokio::sync::mpsc::Receiver;
+use tokio::time::Instant;
 
 use config::Config;
 use kube_state::{Container, KubeResource, KubeState, Machine};
@@ -22,6 +23,7 @@ use platform::pb;
 use crate::kube_state::KubeEvent;
 
 const RECONNECT_INTERVAL: Duration = Duration::from_secs(10);
+const NODES_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 const TIMESTAMP_INFINITY: Timestamp = Timestamp {
     seconds: 4134009600, // 2101-01-01
@@ -77,7 +79,7 @@ async fn run(
 
     let mut edgebit = platform::Client::connect(url.try_into()?, token).await?;
 
-    upsert_all(&mut edgebit, kube.clone(), config.cluster_name()).await?;
+    insert_all(&mut edgebit, kube.clone(), config.cluster_name()).await?;
 
     {
         let kube = kube.clone();
@@ -86,21 +88,34 @@ async fn run(
         });
     }
 
-    while let Some(event) = events.recv().await {
-        match event {
-            KubeEvent::ContainersUpdated(containers) => {
-                handle_containers_updated(&mut edgebit, &kube, containers).await?;
-            }
-            KubeEvent::MachinesAdded(machines) => {
-                handle_machines_added(&mut edgebit, machines).await?;
-            }
+    let mut nodes_heartbeats = tokio::time::interval_at(
+        Instant::now() + NODES_HEARTBEAT_INTERVAL,
+        NODES_HEARTBEAT_INTERVAL,
+    );
+
+    loop {
+        tokio::select! {
+            Some(event) = events.recv() => {
+                match event {
+                    KubeEvent::ContainersUpdated(containers) => {
+                        handle_containers_updated(&mut edgebit, &kube, containers).await?;
+                    }
+                    KubeEvent::MachinesAdded(machines) => {
+                        handle_machines_added(&mut edgebit, machines).await?;
+                    }
+                }
+            },
+            _ = nodes_heartbeats.tick() => {
+                insert_nodes(&mut edgebit, &kube).await?;
+            },
+            else => break,
         }
     }
 
     Ok(())
 }
 
-async fn upsert_all(
+async fn insert_all(
     edgebit: &mut platform::Client,
     kube: Arc<KubeState>,
     cluster_name: String,
@@ -113,19 +128,7 @@ async fn upsert_all(
         })
         .await?;
 
-    let machines = kube
-        .machines()
-        .into_iter()
-        .map(|m| pb::Machine {
-            id: m.id,
-            labels: [(LABEL_NODE_NAME.to_string(), m.name)].into(),
-            ..Default::default()
-        })
-        .collect();
-
-    edgebit
-        .upsert_machines(pb::UpsertMachinesRequest { machines })
-        .await?;
+    insert_nodes(edgebit, &kube).await?;
 
     let workloads: Vec<_> = kube
         .containers()
@@ -269,6 +272,24 @@ async fn handle_machines_added(
 
         edgebit.upsert_machines(req).await?;
     }
+
+    Ok(())
+}
+
+async fn insert_nodes(edgebit: &mut platform::Client, kube: &KubeState) -> Result<()> {
+    let machines = kube
+        .machines()
+        .into_iter()
+        .map(|m| pb::Machine {
+            id: m.id,
+            labels: [(LABEL_NODE_NAME.to_string(), m.name)].into(),
+            ..Default::default()
+        })
+        .collect();
+
+    edgebit
+        .upsert_machines(pb::UpsertMachinesRequest { machines })
+        .await?;
 
     Ok(())
 }
