@@ -165,7 +165,7 @@ fn container_into_pb(kube: &KubeState, c: Container) -> pb::WorkloadInstance {
                 Some(dt) => Some(dt_to_timestamp(dt)),
                 None => Some(TIMESTAMP_INFINITY),
             },
-            image_id: clean_image_id(&c.image_id).to_string(),
+            image_id: String::new(), //clean_image_id(&c.image_id).to_string(),
             image: Some(pb::Image {
                 kind: Some(pb::image::Kind::Docker(pb::DockerImage { tag: c.image })),
             }),
@@ -181,7 +181,7 @@ fn container_into_pb(kube: &KubeState, c: Container) -> pb::WorkloadInstance {
                 Some(dt) => Some(dt_to_timestamp(dt)),
                 None => Some(TIMESTAMP_INFINITY),
             },
-            image_id: clean_image_id(&c.image_id).to_string(),
+            image_id: String::new(), //clean_image_id(&c.image_id).to_string(),
             image: None,
             machine_id,
         }
