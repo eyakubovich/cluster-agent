@@ -147,7 +147,13 @@ async fn insert_all(
 }
 
 fn container_into_pb(kube: &KubeState, c: Container) -> pb::WorkloadInstance {
-    let machine_id = kube.machine_id(&c.node_name).unwrap_or_default();
+    let machine_id = match kube.machine_id(&c.node_name) {
+        Some(id) => id,
+        None => {
+            warn!("machine_id not found for node with name={}", c.node_name);
+            String::new()
+        }
+    };
 
     if let Some(pod) = kube.get(kube_state::KIND_POD, &c.pod_uid) {
         let mut labels = HashMap::new();

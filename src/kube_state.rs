@@ -34,17 +34,29 @@ pub struct Machine {
     pub id: String,
 }
 
-impl From<Node> for Machine {
-    fn from(node: Node) -> Self {
-        let machine_id = node
+impl TryFrom<Node> for Machine {
+    type Error = anyhow::Error;
+
+    fn try_from(node: Node) -> Result<Self> {
+        let name = node.metadata.name.ok_or_else(|| {
+            anyhow!(
+                "name is missing on node with id={}",
+                node.metadata.uid.as_deref().unwrap_or("")
+            )
+        })?;
+
+        let id = node
             .status
             .and_then(|s| s.node_info)
-            .map(|ni| ni.machine_id);
+            .map(|ni| ni.machine_id)
+            .ok_or_else(|| {
+                anyhow!(
+                    "machine_id missing on node with id={}",
+                    node.metadata.uid.as_deref().unwrap_or("")
+                )
+            })?;
 
-        Self {
-            name: node.metadata.name.unwrap_or_default(),
-            id: machine_id.unwrap_or_default(),
-        }
+        Ok(Self { name, id })
     }
 }
 
@@ -268,8 +280,8 @@ impl Resources {
         }
     }
 
-    fn insert_node(&mut self, node: Node) -> Option<Machine> {
-        let machine = Machine::from(node);
+    fn insert_node(&mut self, node: Node) -> Result<Option<Machine>> {
+        let machine = Machine::try_from(node)?;
 
         if self
             .nodes
@@ -277,9 +289,10 @@ impl Resources {
             .is_none()
         {
             // inserted, new machine
-            Some(machine)
+            info!("Adding node: {machine:?}");
+            Ok(Some(machine))
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -405,9 +418,16 @@ impl KubeState {
 
         resources.clear_nodes();
 
+        let mut cnt = 0;
+
         for node in nodes {
-            resources.insert_node(node);
+            if let Err(err) = resources.insert_node(node) {
+                error!("Load nodes: {err}");
+            }
+            cnt += 1;
         }
+
+        info!("Loaded {cnt} nodes");
 
         Ok(())
     }
@@ -419,11 +439,16 @@ impl KubeState {
 
         let mut resources = self.resources.lock().unwrap();
 
+        let mut cnt = 0;
+
         resources.clear_pods();
 
         for pod in pods {
             resources.insert_pod(pod);
+            cnt += 1;
         }
+
+        info!("Loaded {cnt} pods");
 
         Ok(())
     }
@@ -578,6 +603,8 @@ impl KubeState {
                         }
                     }
                     Event::Restarted(rs) => {
+                        info!("Metadata watch restarted");
+
                         let resources = rs
                             .into_iter()
                             .map(|r| KubeResource::from(r.metadata))
@@ -607,9 +634,15 @@ impl KubeState {
                     match e {
                         Event::Applied(node) => {
                             let machine = self.resources.lock().unwrap().insert_node(node);
-                            if let Some(machine) = machine {
-                                let evt = KubeEvent::MachinesAdded(vec![machine]);
-                                _ = events.send(evt).await;
+                            match machine {
+                                Ok(Some(machine)) => {
+                                    let evt = KubeEvent::MachinesAdded(vec![machine]);
+                                    _ = events.send(evt).await;
+                                }
+                                Ok(None) => {}
+                                Err(err) => {
+                                    error!("Node watch (applied event): {err}");
+                                }
                             }
                         }
                         Event::Deleted(node) => {
@@ -618,12 +651,29 @@ impl KubeState {
                             }
                         }
                         Event::Restarted(nodes) => {
-                            let mut resources = self.resources.lock().unwrap();
+                            info!("Node watch restarted");
 
-                            resources.clear_nodes();
+                            let added: Vec<_> = {
+                                let mut resources = self.resources.lock().unwrap();
 
-                            for node in nodes {
-                                resources.insert_node(node);
+                                resources.clear_nodes();
+
+                                nodes
+                                    .into_iter()
+                                    .filter_map(|n| match resources.insert_node(n) {
+                                        Ok(m) => m,
+                                        Err(err) => {
+                                            error!("Node watch (restart event): {err}");
+                                            None
+                                        }
+                                    })
+                                    .collect()
+                            };
+
+                            if !added.is_empty() {
+                                info!("Node watch restart: {} nodes added", added.len());
+                                let evt = KubeEvent::MachinesAdded(added);
+                                _ = events.send(evt).await;
                             }
                         }
                     }
@@ -664,9 +714,12 @@ impl KubeState {
                             }
                         }
                         Event::Restarted(pods) => {
+                            info!("Pod watch restarted");
+
                             let containers = self.resources.lock().unwrap().reset_pods(pods);
 
                             if !containers.is_empty() {
+                                info!("Pod watch restart: {} containers updated", containers.len());
                                 _ = events.send(KubeEvent::ContainersUpdated(containers)).await;
                             }
                         }
