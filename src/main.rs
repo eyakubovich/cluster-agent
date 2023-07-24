@@ -22,7 +22,7 @@ use platform::pb;
 
 use crate::kube_state::KubeEvent;
 
-const RECONNECT_INTERVAL: Duration = Duration::from_secs(10);
+const RECONNECT_INTERVAL: Duration = Duration::from_secs(15);
 const NODES_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 const TIMESTAMP_INFINITY: Timestamp = Timestamp {
