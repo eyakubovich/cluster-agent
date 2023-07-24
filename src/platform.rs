@@ -23,7 +23,7 @@ use self::pb::UpsertWorkloadsRequest;
 
 const EXPIRATION_SLACK: Duration = Duration::from_secs(60);
 const DEFAULT_EXPIRATION: Duration = Duration::from_secs(60 * 60);
-const RETRY_INTERVAL: Duration = Duration::from_secs(1);
+const RETRY_INTERVAL: Duration = Duration::from_secs(15);
 
 pub struct Client {
     inventory_svc: InventoryServiceClient<InterceptedService<Channel, AuthToken>>,
