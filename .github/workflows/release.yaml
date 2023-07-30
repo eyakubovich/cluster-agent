@@ -116,6 +116,18 @@ jobs:
           name: sbom-${{ matrix.arch }}.spdx.json
           path: /tmp/sbom.spdx.json
 
+      - name: Upload SBOM to EdgeBit
+        uses: edgebitio/edgebit-build@main
+        with:
+          edgebit-url: https://edgebit.edgebit.io
+          token: ${{ secrets.EDGEBIT_ACCESS_TOKEN }}
+          tags: latest
+          component: cluster-agent
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          image-id: "${{ steps.build.outputs.imageid }}"
+          image-tag: "${{ steps.meta.outputs.tags }}"
+          sbom-file: /tmp/sbom.spdx.json
+
   docker-combine:
     needs: build
 
