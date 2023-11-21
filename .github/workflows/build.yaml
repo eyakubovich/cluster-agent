@@ -22,41 +22,28 @@ jobs:
         with:
           push: false
 
-      # Download and run Syft manually in order to enable a custom set of catalogers
-      # We want to use the package-lock one which is not enabled by default for containers
-      - name: Download Syft
+      - name: Generate SBOM from the container
         if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
-        id: syft
-        uses: anchore/sbom-action/download-syft@v0.14.2
+        uses: eyakubovich/sbom-action@ey/add-config-input
+        with:
+          image: ${{ steps.build.outputs.digest }}
+          artifact-name: sbom.spdx.json
+          upload-artifact: true
+          config: .github/edgebit/build-syft.yaml
 
-      - name: Generate SBOM with custom cataloger
-        if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
-        run: "${{ steps.syft.outputs.cmd }} --config .github/config/syft.yaml -o syft-json --file /tmp/sbom.syft.json ${{ steps.build.outputs.imageid }}"
-
-      #- name: Generate SBOM
-      #  uses: anchore/sbom-action@v0
-      #  if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
-      #  with:
-      #    # generate for the container built above
-      #    image: ${{ steps.build.outputs.imageid }}
-      #    artifact-name: sbom.syft.json
-      #    output-file: /tmp/sbom.syft.json
-      #    format: syft-json
-
-      - name: Save Artifacts
+      - name: Save metadata to an artifact
         if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
         run: |
-          mkdir -p ./artifacts
-          cat > ./artifacts/metadata.json <<EOF
+          cat > /tmp/metadata.json <<EOF
             {
               "image-id": "${{ steps.build.outputs.imageid }}",
-              "pr-number": "${{ github.event.number }}"
+              "pr-number": "${{ github.event.number }}",
+              "tags": "${{ github.ref == 'refs/heads/main' && 'latest' || '' }}"
             }
           EOF
-          cp /tmp/sbom.syft.json ./artifacts/
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
         with:
-          name: artifacts
-          path: artifacts/
+          name: metadata.json
+          path: /tmp/metadata.json

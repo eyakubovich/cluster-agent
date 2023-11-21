@@ -92,41 +92,32 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
 
-      #- name: Generate and publish the SBOM
-      #  uses: anchore/sbom-action@v0
-      #  with:
-      #    # generate for the container built above
-      #    image: ${{ steps.build.outputs.imageid }}
-      #    artifact-name: sbom-${{ matrix.arch }}.spdx.json
-      #    output-file: /tmp/sbom.spdx.json
-      #    format: spdx-json
-
-      # Download and run Syft manually in order to enable a custom set of catalogers
-      # We want to use the package-lock one which is not enabled by default for containers
-      - name: Download Syft
-        id: syft
-        uses: anchore/sbom-action/download-syft@v0.14.2
-
-      - name: Generate SBOM with custom cataloger
-        run: "${{ steps.syft.outputs.cmd }} --config .github/config/syft.yaml -o spdx-json --file /tmp/sbom.spdx.json ${{ steps.build.outputs.imageid }}"
-
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v3
+      - name: Generate SBOM from the container
+        if: ${{ matrix.arch == 'amd64' }}
+        uses: eyakubovich/sbom-action@ey/add-config-input
         with:
-          name: sbom-${{ matrix.arch }}.spdx.json
-          path: /tmp/sbom.spdx.json
+          image: ${{ steps.build.outputs.digest }}
+          artifact-name: sbom.spdx.json
+          upload-artifact: true
+          config: .github/edgebit/build-syft.yaml
 
-      - name: Upload SBOM to EdgeBit
-        uses: edgebitio/edgebit-build@main
+      - name: Save metadata to an artifact
+        if: ${{ matrix.arch == 'amd64' }}
+        run: |
+          cat > /tmp/metadata.json <<EOF
+            {
+              "image-id": "${{ steps.build.outputs.imageid }}",
+              "pr-number": "${{ github.event.number }}",
+              "tags": "${{ github.ref == 'refs/heads/main' && 'latest' || '' }}"
+            }
+          EOF
+
+      - uses: actions/upload-artifact@v3
+        if: ${{ matrix.arch == 'amd64' }}
         with:
-          edgebit-url: https://edgebit.edgebit.io
-          token: ${{ secrets.EDGEBIT_ACCESS_TOKEN }}
-          tags: latest
-          component: cluster-agent
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          image-id: "${{ steps.build.outputs.imageid }}"
-          image-tag: "${{ steps.meta.outputs.tags }}"
-          sbom-file: /tmp/sbom.spdx.json
+          name: metadata.json
+          path: /tmp/metadata.json
+
 
   docker-combine:
     needs: build
