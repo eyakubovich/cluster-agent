@@ -94,30 +94,24 @@ jobs:
 
       - name: Generate SBOM from the container
         if: ${{ matrix.arch == 'amd64' }}
-        uses: eyakubovich/sbom-action@ey/add-config-input
+        uses: anchore/sbom-action@main
         with:
           image: ${{ steps.build.outputs.imageid }}
           artifact-name: sbom.spdx.json
           upload-artifact: true
           config: .github/edgebit/build-syft.yaml
 
-      - name: Save metadata to an artifact
+      - name: Upload SBOM to EdgeBit
         if: ${{ matrix.arch == 'amd64' }}
-        run: |
-          cat > /tmp/metadata.json <<EOF
-            {
-              "image-id": "${{ steps.build.outputs.imageid }}",
-              "pr-number": "${{ github.event.number }}",
-              "tags": "${{ github.ref == 'refs/heads/main' && 'latest' || '' }}"
-            }
-          EOF
-
-      - uses: actions/upload-artifact@v3
-        if: ${{ matrix.arch == 'amd64' }}
+        uses: edgebitio/edgebit-build@main
         with:
-          name: metadata.json
-          path: /tmp/metadata.json
-
+          edgebit-url: https://edgebit.edgebit.io
+          token: ${{ secrets.EDGEBIT_ACCESS_TOKEN }}
+          sbom-file: sbom.spdx.json
+          image-id: ${{ steps.build.outputs.imageid }}
+          image-tag: ${{ steps.meta.outputs.tags }}
+          component: cluster-agent
+          tags: v${{ steps.meta.outputs.version }}
 
   docker-combine:
     needs: build
