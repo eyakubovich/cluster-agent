@@ -93,12 +93,12 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
       - name: Generate SBOM from the container
+        id: sbom
         if: ${{ matrix.arch == 'amd64' }}
         uses: anchore/sbom-action@main
         with:
           image: ${{ steps.build.outputs.imageid }}
-          artifact-name: sbom.spdx.json
-          upload-artifact: true
+          output-file: /tmp/sbom.spdx.json
           config: .github/edgebit/build-syft.yaml
 
       - name: Upload SBOM to EdgeBit
@@ -107,7 +107,7 @@ jobs:
         with:
           edgebit-url: https://edgebit.edgebit.io
           token: ${{ secrets.EDGEBIT_ACCESS_TOKEN }}
-          sbom-file: sbom.spdx.json
+          sbom-file: /tmp/sbom.spdx.json
           image-id: ${{ steps.build.outputs.imageid }}
           image-tag: ${{ steps.meta.outputs.tags }}
           component: cluster-agent
