@@ -12,9 +12,13 @@ jobs:
   build-binaries:
     strategy:
       matrix:
-        runs-on: [buildjet-4vcpu-ubuntu-2204, buildjet-4vcpu-ubuntu-2204-arm]
+        include:
+          - runner: buildjet-4vcpu-ubuntu-2204
+            arch: amd64
+          - runner: buildjet-4vcpu-ubuntu-2204-arm
+            arch: arm64
 
-    runs-on: ${{matrix.runs-on}}
+    runs-on: ${{matrix.runner}}
 
     steps:
       - uses: actions/checkout@v3
@@ -38,7 +42,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
       - name: Generate SBOM from the container
-        if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
+        if: ${{ matrix.arch == 'amd64' }}
         uses: anchore/sbom-action@v0
         with:
           image: ${{ steps.build.outputs.imageid }}
@@ -47,7 +51,7 @@ jobs:
           config: .github/edgebit/build-syft.yaml
 
       - name: Save metadata to an artifact
-        if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
+        if: ${{ matrix.arch == 'amd64' }}
         run: |
           cat > /tmp/metadata.json <<EOF
             {
@@ -59,7 +63,7 @@ jobs:
           EOF
 
       - uses: actions/upload-artifact@v3
-        if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
+        if: ${{ matrix.arch == 'amd64' }}
         with:
           name: metadata.json
           path: /tmp/metadata.json
