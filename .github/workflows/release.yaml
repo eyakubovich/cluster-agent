@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write  # for sigstore OIDC
-      contents: write  # for pushing the signed tag
+      id-token: write # for sigstore OIDC
+      contents: write # for pushing the signed tag
 
     steps:
       - uses: actions/checkout@v3
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write  # For creating a draft release
+      contents: write # For creating a draft release
 
     steps:
       - name: Creating a draft release
@@ -58,7 +58,7 @@ jobs:
     runs-on: ${{matrix.runner}}
 
     permissions:
-      id-token: write  # For AWS OIDC
+      id-token: write # For AWS OIDC
 
     steps:
       - uses: actions/checkout@v3
@@ -95,7 +95,7 @@ jobs:
       - name: Generate SBOM from the container
         id: sbom
         if: ${{ matrix.arch == 'amd64' }}
-        uses: anchore/sbom-action@main
+        uses: anchore/sbom-action@v0
         with:
           image: ${{ steps.build.outputs.imageid }}
           output-file: /tmp/sbom.spdx.json
@@ -119,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write  # For AWS OIDC
+      id-token: write # For AWS OIDC
 
     steps:
       - name: Authenticate to AWS
@@ -156,4 +156,3 @@ jobs:
             $tags \
             public.ecr.aws/edgebit/cluster-agent:${{ steps.meta.outputs.version}}-amd64 \
             public.ecr.aws/edgebit/cluster-agent:${{ steps.meta.outputs.version}}-arm64
-
