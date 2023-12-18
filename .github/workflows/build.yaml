@@ -19,11 +19,23 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Generate Image Metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            public.ecr.aws/edgebit/cluster-agent
+          tags: |
+            type=ref,event=pr,suffix=-${{ matrix.arch }}
+          flavor: |
+            latest=false
+
       - id: build
         name: Building agent
         uses: docker/build-push-action@v3
         with:
-          push: false
+          push: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          tags: ${{ steps.meta.outputs.tags }}
 
       - name: Generate SBOM from the container
         if: ${{ matrix.runs-on == 'buildjet-4vcpu-ubuntu-2204' }}
@@ -40,6 +52,7 @@ jobs:
           cat > /tmp/metadata.json <<EOF
             {
               "image-id": "${{ steps.build.outputs.imageid }}",
+              "image-tag": "${{ steps.meta.outputs.tags }}",
               "pr-number": "${{ github.event.number }}",
               "tags": "${{ github.ref == 'refs/heads/main' && 'latest' || '' }}"
             }
