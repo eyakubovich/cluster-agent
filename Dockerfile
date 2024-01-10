@@ -4,24 +4,19 @@ RUN apt -y update && apt -y install protobuf-compiler pkg-config libssl-dev
 
 RUN rustup component add rustfmt
 
-RUN mkdir /work
-WORKDIR /work
-
 ADD . /work
+
+WORKDIR /work
 
 RUN cargo fmt --check && cargo build --release
 
 # ---------------------------
 
-FROM debian:bookworm-slim
+FROM cgr.dev/chainguard/glibc-dynamic:latest
 
-RUN apt -y update && apt -y install openssl
-
-RUN mkdir -p /opt/edgebit
-
-COPY --from=builder /work/target/release/cluster-agent /opt/edgebit/
+COPY --from=builder /work/target/release/cluster-agent /app/cluster-agent
 
 # Copy the lock file for SBOM to include Rust packages
-COPY --from=builder /work/Cargo.lock /opt/edgebit
+COPY --from=builder /work/Cargo.lock /app/
 
-ENTRYPOINT [ "/opt/edgebit/cluster-agent" ]
+ENTRYPOINT [ "/app/cluster-agent" ]
