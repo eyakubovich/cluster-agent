@@ -174,7 +174,7 @@ fn container_into_pb(kube: &KubeState, c: Container) -> pb::WorkloadInstance {
                 Some(dt) => Some(dt_to_timestamp(dt)),
                 None => Some(TIMESTAMP_INFINITY),
             },
-            image_id: String::new(), //clean_image_id(&c.image_id).to_string(),
+            image_id: String::new(),
             image: Some(pb::Image {
                 kind: Some(pb::image::Kind::Docker(pb::DockerImage { tag: c.image })),
             }),
@@ -190,7 +190,7 @@ fn container_into_pb(kube: &KubeState, c: Container) -> pb::WorkloadInstance {
                 Some(dt) => Some(dt_to_timestamp(dt)),
                 None => Some(TIMESTAMP_INFINITY),
             },
-            image_id: String::new(), //clean_image_id(&c.image_id).to_string(),
+            image_id: String::new(),
             image: None,
             machine_id,
         }
@@ -305,16 +305,5 @@ fn clean_workload_id(id: &str) -> &str {
     match id.split_once("//") {
         Some((_, result)) => result,
         None => id,
-    }
-}
-
-fn clean_image_id(id: &str) -> &str {
-    // strip off the scheme + tag: docker-pullable://debian@432f545c6ba13b...
-    match id.split_once('@') {
-        Some((_, result)) => result,
-        None => match id.split_once("//") {
-            Some((_, result)) => result,
-            None => id,
-        },
     }
 }

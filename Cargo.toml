@@ -1,28 +1,28 @@
 [package]
 name = "cluster-agent"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.4.8", features = ["derive"] }
-tokio = { version = "1.28", features = ["full"] }
-anyhow = "1.0.71"
+clap = { version = "4.4.14", features = ["derive"] }
+tokio = { version = "1.35", features = ["full"] }
+anyhow = "1.0.79"
 log = "0.4"
 pretty_env_logger = "0.5"
 serde = "1.0"
 serde_yaml = "0.9"
 chrono = { version = "0.4", default-features = false }
-futures = "0.3.28"
-kube-client = "0.87.1"
-kube-runtime = "0.87.1"
-kube = { version = "0.87.1", default-features = false, features = ["client", "rustls-tls"] }
+futures = "0.3.30"
+kube-client = "0.87.2"
+kube-runtime = "0.87.2"
+kube = { version = "0.87.2", default-features = false, features = ["client", "rustls-tls"] }
 k8s-openapi = { version = "0.20.0", features = ["v1_26"] }
-tonic = { version = "0.9", features = ["transport", "tls", "tls-webpki-roots"] }
-prost = "0.11"
-prost-types = "0.11"
+tonic = { version = "0.10.2", features = ["transport", "tls", "tls-webpki-roots"] }
+prost = "0.12.3"
+prost-types = "0.12.3"
 gethostname = "0.4"
 
 [build-dependencies]
-tonic-build = "0.8"
+tonic-build = "0.10.2"
