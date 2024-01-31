@@ -18,7 +18,7 @@ use tokio::time::Instant;
 
 use config::Config;
 use kube_state::{Container, KubeResource, KubeState, Machine};
-use platform::pb;
+use platform::{pb, Client};
 
 use crate::kube_state::KubeEvent;
 
@@ -59,27 +59,30 @@ async fn main() -> Result<()> {
     kube.load_all().await?;
 
     loop {
-        if let Err(err) = run(&config, kube.clone(), &mut events).await {
+        let url = config.edgebit_url();
+        let token = config.edgebit_id();
+
+        info!("Connecting to EdgeBit at {url}");
+
+        let mut edgebit = Client::connect(url.try_into()?, token).await?;
+
+        if let Err(err) = run(&mut edgebit, &config, kube.clone(), &mut events).await {
             error!("{err}");
         }
+
+        edgebit.stop().await;
 
         tokio::time::sleep(RECONNECT_INTERVAL).await;
     }
 }
 
 async fn run(
+    edgebit: &mut Client,
     config: &Config,
     kube: Arc<KubeState>,
     events: &mut Receiver<KubeEvent>,
 ) -> Result<()> {
-    let url = config.edgebit_url();
-    let token = config.edgebit_id();
-
-    info!("Connecting to EdgeBit at {url}");
-
-    let mut edgebit = platform::Client::connect(url.try_into()?, token).await?;
-
-    insert_all(&mut edgebit, kube.clone(), config.cluster_name()).await?;
+    insert_all(edgebit, kube.clone(), config.cluster_name()).await?;
 
     {
         let kube = kube.clone();
@@ -98,15 +101,15 @@ async fn run(
             Some(event) = events.recv() => {
                 match event {
                     KubeEvent::ContainersUpdated(containers) => {
-                        handle_containers_updated(&mut edgebit, &kube, containers).await?;
+                        handle_containers_updated(edgebit, &kube, containers).await?;
                     }
                     KubeEvent::MachinesAdded(machines) => {
-                        handle_machines_added(&mut edgebit, machines).await?;
+                        handle_machines_added(edgebit, machines).await?;
                     }
                 }
             },
             _ = nodes_heartbeats.tick() => {
-                insert_nodes(&mut edgebit, &kube).await?;
+                insert_nodes(edgebit, &kube).await?;
             },
             else => break,
         }
