@@ -1,4 +1,4 @@
-FROM rust:1.70-slim-bookworm AS builder
+FROM rust:1.76-slim-bookworm AS builder
 
 RUN apt -y update && apt -y install protobuf-compiler pkg-config libssl-dev
 
