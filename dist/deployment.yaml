@@ -51,7 +51,7 @@ spec:
     spec:
       containers:
         - name: cluster-agent
-          image: "public.ecr.aws/edgebit/cluster-agent:0.1.5"
+          image: "public.ecr.aws/edgebit/cluster-agent:0.1.6"
           imagePullPolicy: IfNotPresent
           command:
           ports:
