@@ -72,6 +72,7 @@ jobs:
         run: |
           cat > /tmp/metadata.json <<EOF
             {
+              "commit-sha": "${{ github.sha }}",
               "image-id": "${{ steps.build.outputs.imageid }}",
               "image-tag": "${{ steps.meta.outputs.tags }}",
               "pr-number": "${{ github.event.number }}",
